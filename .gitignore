@@ -1,0 +1,15 @@
+# Eclipse / workspace
+.metadata/
+.settings/
+.project
+.cproject
+
+# Pastas de build
+Debug/
+Release/
+bin/
+out/
+
+# Arquivos gerados
+*.o
+*.exe
