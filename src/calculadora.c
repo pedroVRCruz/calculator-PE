@@ -3,7 +3,7 @@
  Name        : calculadora.c
  Author      : Pedro, Cassia e João
  Version     :
- Description : Calculadora simples em C com preparação para inteiros grandes
+ Description : Calculadora em C
  ============================================================================
  */
 
@@ -22,6 +22,123 @@ typedef struct {
     int n;
     int *digitos;
 } BigInt;
+
+/* -------------------------------------------------------------------------
+ * Funções utilitárias para BigInt
+ * ------------------------------------------------------------------------- */
+
+/* Cria um BigInt representando zero, com espaço para "tamanho" dígitos. */
+BigInt *big_criar_zero(int tamanho) {
+    if (tamanho < 1) tamanho = 1;
+
+    BigInt *z = (BigInt *)malloc(sizeof(BigInt));
+    if (!z) return NULL;
+
+    z->sinal = 1;
+    z->n = 1;
+    z->digitos = (int *)calloc(tamanho, sizeof(int));
+    if (!z->digitos) {
+        free(z);
+        return NULL;
+    }
+
+    z->digitos[0] = 0;
+    return z;
+}
+
+/* Remove zeros à esquerda e garante que zero tenha sinal positivo. */
+void big_normalizar(BigInt *x) {
+    if (!x) return;
+
+    while (x->n > 1 && x->digitos[x->n - 1] == 0) {
+        x->n--;
+    }
+
+    if (x->n == 1 && x->digitos[0] == 0) {
+        x->sinal = 1;
+    }
+}
+
+/* Cria uma cópia profunda de um BigInt. */
+BigInt *big_copiar(const BigInt *orig) {
+    if (!orig) return NULL;
+
+    BigInt *copia = (BigInt *)malloc(sizeof(BigInt));
+    if (!copia) return NULL;
+
+    copia->sinal = orig->sinal;
+    copia->n = orig->n;
+    copia->digitos = (int *)malloc(orig->n * sizeof(int));
+    if (!copia->digitos) {
+        free(copia);
+        return NULL;
+    }
+
+    for (int i = 0; i < orig->n; i++) {
+        copia->digitos[i] = orig->digitos[i];
+    }
+
+    return copia;
+}
+
+/* Compara apenas os módulos. Retorna -1 se a < b, 0 se igual, 1 se a > b. */
+int big_comparar_abs(const BigInt *a, const BigInt *b) {
+    if (a->n != b->n) {
+        return (a->n < b->n) ? -1 : 1;
+    }
+
+    for (int i = a->n - 1; i >= 0; i--) {
+        if (a->digitos[i] != b->digitos[i]) {
+            return (a->digitos[i] < b->digitos[i]) ? -1 : 1;
+        }
+    }
+    return 0;
+}
+
+/* Subtrai módulos assumindo a >= b e ambos não negativos. */
+BigInt *big_subtrair_abs(const BigInt *a, const BigInt *b) {
+    BigInt *resultado = big_criar_zero(a->n);
+    if (!resultado) return NULL;
+
+    resultado->n = a->n;
+
+    int emprestimo = 0;
+    for (int i = 0; i < a->n; i++) {
+        int valor_a = a->digitos[i];
+        int valor_b = (i < b->n) ? b->digitos[i] : 0;
+
+        int sub = valor_a - valor_b - emprestimo;
+        if (sub < 0) {
+            sub += 10;
+            emprestimo = 1;
+        } else {
+            emprestimo = 0;
+        }
+        resultado->digitos[i] = sub;
+    }
+
+    big_normalizar(resultado);
+    return resultado;
+}
+
+/* Multiplica o número atual por 10 e adiciona um dígito (0-9). */
+int big_multiplicar_por10_adicionar(BigInt *x, int digito) {
+    if (!x || digito < 0 || digito > 9) return -1;
+
+    int *novo = (int *)realloc(x->digitos, (x->n + 1) * sizeof(int));
+    if (!novo) return -1;
+    x->digitos = novo;
+
+    /* desloca os dígitos para abrir espaço para o novo menos significativo */
+    for (int i = x->n - 1; i >= 0; i--) {
+        x->digitos[i + 1] = x->digitos[i];
+    }
+    x->digitos[0] = digito;
+    x->n += 1;
+
+    big_normalizar(x);
+    return 0;
+}
 
 /*
  * Cria um BigInt a partir de uma string decimal, opcionalmente com sinal.
@@ -222,6 +339,107 @@ BigInt* big_subtrair(const BigInt *a, const BigInt *b) {
     return respostafinalsubtrair;
 }
 
+/* Divide dois BigInt e retorna quociente; resto opcionalmente é retornado em resto_out. */
+BigInt *big_dividir_mod(const BigInt *dividendo, const BigInt *divisor, BigInt **resto_out) {
+    if (!dividendo || !divisor) return NULL;
+
+    /* Verificação de divisão por zero */
+    if (divisor->n == 1 && divisor->digitos[0] == 0) {
+        printf("Erro: divisão por zero não é permitida.\n");
+        return NULL;
+    }
+
+    BigInt *dividendo_abs = big_copiar(dividendo);
+    BigInt *divisor_abs = big_copiar(divisor);
+    if (!dividendo_abs || !divisor_abs) {
+        big_destruir(dividendo_abs);
+        big_destruir(divisor_abs);
+        return NULL;
+    }
+    dividendo_abs->sinal = 1;
+    divisor_abs->sinal = 1;
+
+    /* Pré-aloca quociente e resto com espaço suficiente. */
+    BigInt *quociente = big_criar_zero(dividendo_abs->n);
+    BigInt *resto = big_criar_zero(dividendo_abs->n + 1);
+    if (!quociente || !resto) {
+        big_destruir(dividendo_abs);
+        big_destruir(divisor_abs);
+        big_destruir(quociente);
+        big_destruir(resto);
+        return NULL;
+    }
+
+    quociente->n = dividendo_abs->n;
+
+    /* Algoritmo de divisão longa: percorre dos dígitos mais significativos para os menos. */
+    for (int i = dividendo_abs->n - 1; i >= 0; i--) {
+        if (big_multiplicar_por10_adicionar(resto, dividendo_abs->digitos[i]) != 0) {
+            big_destruir(dividendo_abs);
+            big_destruir(divisor_abs);
+            big_destruir(quociente);
+            big_destruir(resto);
+            return NULL;
+        }
+
+        int q_digit = 0;
+        while (big_comparar_abs(resto, divisor_abs) >= 0) {
+            BigInt *novo_resto = big_subtrair_abs(resto, divisor_abs);
+            if (!novo_resto) {
+                big_destruir(dividendo_abs);
+                big_destruir(divisor_abs);
+                big_destruir(quociente);
+                big_destruir(resto);
+                return NULL;
+            }
+            big_destruir(resto);
+            resto = novo_resto;
+            q_digit++;
+        }
+
+        quociente->digitos[i] = q_digit;
+    }
+
+    big_normalizar(quociente);
+
+    /* Define sinais de acordo com as regras matemáticas. */
+    if (quociente->n == 1 && quociente->digitos[0] == 0) {
+        quociente->sinal = 1;
+    } else {
+        quociente->sinal = dividendo->sinal * divisor->sinal;
+    }
+
+    if (resto->n == 1 && resto->digitos[0] == 0) {
+        resto->sinal = 1;
+    } else {
+        resto->sinal = dividendo->sinal;
+    }
+
+    big_destruir(dividendo_abs);
+    big_destruir(divisor_abs);
+
+    if (resto_out) {
+        *resto_out = resto;
+    } else {
+        big_destruir(resto);
+    }
+
+    return quociente;
+}
+
+/* Retorna apenas o quociente da divisão. */
+BigInt *big_dividir(const BigInt *dividendo, const BigInt *divisor) {
+    return big_dividir_mod(dividendo, divisor, NULL);
+}
+
+/* Retorna apenas o resto (módulo) da divisão. */
+BigInt *big_mod(const BigInt *dividendo, const BigInt *divisor) {
+    BigInt *resto = NULL;
+    BigInt *quociente = big_dividir_mod(dividendo, divisor, &resto);
+    big_destruir(quociente);
+    return resto;
+}
+
 /* -------------------------------------------------------------------------
  * Funções da calculadora simples (versão com int / long long)
  * ------------------------------------------------------------------------- */
@@ -401,21 +619,39 @@ void menu_bigint_entrada_usuario() {
         BigInt *r = NULL;
 
         switch (opc) {
-            case 1: 
-                r = big_somar(a, b); 
+            case 1:
+                r = big_somar(a, b);
                 printf("Soma: ");
                 big_imprimir(r);
                 printf("\n");
                 break;
-            case 2: 
-                r = big_subtrair(a, b); 
-                printf("Soma: ");
+            case 2:
+                r = big_subtrair(a, b);
+                printf("Subtração: ");
                 big_imprimir(r);
                 printf("\n");
                 break;
-            // case 3: r = big_multiplicar(a, b); break;
-            // case 4: r = big_dividir(a, b); break;
-            // case 5: r = big_mod(a, b); break;
+            case 3:
+                printf("Multiplicação ainda não implementada.\n");
+                break;
+            case 4:
+                r = big_dividir(a, b);
+                if (r) {
+                    printf("Quociente: ");
+                    big_imprimir(r);
+                    printf("\n");
+                }
+                break;
+            case 5: {
+                BigInt *resto = big_mod(a, b);
+                if (resto) {
+                    printf("Resto: ");
+                    big_imprimir(resto);
+                    printf("\n");
+                }
+                r = resto;
+                break;
+            }
 
             default:
                 printf("Opção inválida.\n");
