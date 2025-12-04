@@ -291,6 +291,33 @@ BigInt* big_subtrair(const BigInt *a, const BigInt *b) {
     return respostafinalsubtrair;
 }
 
+/*implanta função de multiplicação*/
+BigInt* big_multiplicar(const BigInt *a, const BigInt *b) {
+
+    int tamanho = a->n + b->n;
+
+    /*aloca o bigint */
+    BigInt *resultado = malloc(sizeof(BigInt));
+    resultado->digitos = calloc(tamanho, sizeof(int));
+    resultado->n = tamanho;
+
+    /*multiplicacao dos digitos 1 por 1*/
+    for (int i = 0; i < a->n; i++) {
+        int auxiliar = 0;
+        for (int j = 0; j < b->n; j++) {
+
+            /*calcula um produto,soma e guarda o excesso*/
+            int multi = resultado->digitos[i + j]+ a->digitos[i] * b->digitos[j]+ auxiliar;
+            resultado->digitos[i + j] = multi % 10;
+            auxiliar = multi / 10;
+        }
+        if (auxiliar)
+            resultado->digitos[i + b->n] += auxiliar;
+    }
+    return resultado;
+}
+
+
 /* Divide dois BigInt e retorna quociente; resto opcionalmente é retornado em resto_out. */
 BigInt *big_dividir_mod(const BigInt *dividendo, const BigInt *divisor, BigInt **resto_out) {
     if (!dividendo || !divisor) return NULL;
@@ -546,7 +573,10 @@ void menu_bigint_entrada_usuario() {
                 printf("\n");
                 break;
             case 3:
-                printf("Multiplicação ainda não implementada.\n");
+                r = big_multiplicar(a, b);
+                printf("Multiplicação: ");
+                big_imprimir(r);
+                printf("\n");
                 break;
             case 4:
                 r = big_dividir(a, b);
@@ -675,7 +705,7 @@ void menu_bigint_arquivo() {
     switch (operacao) {
         case '+': res = big_somar(x, y);    break;
         case '-': res = big_subtrair(x, y); break;
-        case '*': printf("Multiplicacao ainda nao implementada\n"); break;
+        case '*': res = big_multiplicar(x,y); break;
         case '/': res = big_dividir(x, y);  break;
         case '%': res = big_mod(x, y);      break;
         default:
