@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <windows.h>
 
 /*
  * Representa um inteiro arbitrariamente grande.
@@ -774,8 +773,6 @@ void menu_bigint_arquivo() {
         MAIN PRINCIPAL
 --------------------------------- */
 int main() {
-
-    SetConsoleOutputCP(CP_UTF8); // ← ativa UTF-8, permitindo print de caractéres especiais
 
     int opc = 1;
     while (opc) {
