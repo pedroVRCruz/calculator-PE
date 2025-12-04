@@ -23,6 +23,11 @@ typedef struct {
     int *digitos;
 } BigInt;
 
+/* Verifica se o BigInt é zero. */
+int big_eh_zero(const BigInt *x) {
+    return x && x->n == 1 && x->digitos[0] == 0;
+}
+
 /* -------------------------------------------------------------------------
  * Funções utilitárias para BigInt
  * ------------------------------------------------------------------------- */
@@ -379,6 +384,35 @@ BigInt *big_mod(const BigInt *dividendo, const BigInt *divisor) {
     return resto;
 }
 
+/* Calcula o MDC de dois BigInt usando o algoritmo de Euclides. */
+BigInt *big_mdc(const BigInt *a, const BigInt *b) {
+    if (!a || !b) return NULL;
+
+    BigInt *x = big_copiar(a);
+    BigInt *y = big_copiar(b);
+    if (!x || !y) {
+        big_destruir(x);
+        big_destruir(y);
+        return NULL;
+    }
+    x->sinal = 1;
+    y->sinal = 1;
+
+    while (!big_eh_zero(y)) {
+        BigInt *r = big_mod(x, y);
+        if (!r) {
+            big_destruir(x);
+            big_destruir(y);
+            return NULL;
+        }
+        big_destruir(x);
+        x = y;
+        y = r;
+    }
+
+    return x;
+}
+
 /* -------------------------------------------------------------------------
  * Funções da calculadora simples (versão com int / long long)
  * ------------------------------------------------------------------------- */
@@ -516,12 +550,14 @@ void menu_bigint_entrada_usuario() {
     printf(" [4] ➜ Divisão\n");
     printf(" [5] ➜ Módulo\n");
     printf("------------------------------------------------------------\n");
-    printf(" [6] ➜ Voltar ao menu principal\n");
+    printf(" [6] ➜ MDC (máximo divisor comum)\n");
+    printf("------------------------------------------------------------\n");
+    printf(" [7] ➜ Voltar ao menu principal\n");
     printf("============================================================\n");
     printf("Escolha uma opção: ");
         scanf("%d", &opc);
-        if (opc == 6) break;
-        if (opc < 1 || opc > 6) {
+        if (opc == 7) break;
+        if (opc < 1 || opc > 7) {
             printf("Opção inválida.\n");
             continue;
         }
@@ -566,6 +602,14 @@ void menu_bigint_entrada_usuario() {
                 r = resto;
                 break;
             }
+            case 6:
+                r = big_mdc(a, b);
+                if (r) {
+                    printf("MDC: ");
+                    big_imprimir(r);
+                    printf("\n");
+                }
+                break;
             default:
                 printf("Opção inválida.\n");
         }
